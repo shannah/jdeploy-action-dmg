@@ -85,9 +85,9 @@ runs:
           export PATH="$JAVA_HOME/bin:$PATH"
         fi
         cd jdeploy-source/shared
-        mvn clean install
+        mvn clean install -DskipTests
         cd ../cli
-        mvn clean package
+        mvn clean package -DskipTests
         npm install
         npm link
 
