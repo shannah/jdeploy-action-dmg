@@ -1,0 +1,135 @@
+name: 'Create DMG and Upload to Release'
+description: 'Generates DMG files using jDeploy and uploads them to a GitHub release'
+author: 'Your Name'
+inputs:
+  jdeploy_version:
+    description: 'The version of jDeploy to use. Prefix with "git://" to build from a Git branch, tag, or commit hash.'
+    default: 'latest'
+    required: true
+  release_tag:
+    description: 'The tag name of the release to upload the DMG to. If not specified, the action will attempt to determine it automatically.'
+    required: false
+  github_token:
+    description: 'GitHub token for authentication'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '16.x'
+
+    # Conditional step to set up Java if jdeploy_version starts with git://
+    - name: Set up Java for jDeploy
+      if: ${{ startsWith(inputs.jdeploy_version, 'git://') }}
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'zulu'
+      id: setup-java-jdeploy
+
+    # Extract the jdeploy version or ref
+    - name: Extract jDeploy Version
+      shell: bash
+      run: |
+        if [[ "${{ inputs.jdeploy_version }}" == git://* ]]; then
+          JDEPLOY_REF="${{ inputs.jdeploy_version#git:// }}"
+          echo "JDEPLOY_REF=$JDEPLOY_REF" >> $GITHUB_ENV
+          echo "JDEPLOY_EXEC=jdeploy" >> $GITHUB_ENV
+        else
+          echo "JDEPLOY_VERSION=${{ inputs.jdeploy_version }}" >> $GITHUB_ENV
+          echo "JDEPLOY_EXEC=jdeploy@${{ inputs.jdeploy_version }}" >> $GITHUB_ENV
+        fi
+
+    # Determine release_tag if not specified
+    - name: Determine Release Tag
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.release_tag }}" ]; then
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+          elif [[ "$GITHUB_REF_TYPE" == "branch" ]]; then
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+          else
+            echo "Cannot determine release tag from GITHUB_REF_TYPE: $GITHUB_REF_TYPE"
+            exit 1
+          fi
+        else
+          RELEASE_TAG="${{ inputs.release_tag }}"
+        fi
+        echo "Using release tag: $RELEASE_TAG"
+        echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+
+    # Checkout jDeploy source if using git:// version
+    - name: Checkout jDeploy Source
+      if: ${{ startsWith(inputs.jdeploy_version, 'git://') }}
+      shell: bash
+      run: |
+        git clone https://github.com/shannah/jdeploy.git jdeploy-source
+        cd jdeploy-source
+        git checkout "$JDEPLOY_REF"
+
+    # Build jDeploy from Source
+    - name: Build jDeploy from Source
+      if: ${{ startsWith(inputs.jdeploy_version, 'git://') }}
+      shell: bash
+      run: |
+        # Use isolated JAVA_HOME if set
+        if [ -n "${{ steps.setup-java-jdeploy.outputs.path }}" ]; then
+          export JAVA_HOME="${{ steps.setup-java-jdeploy.outputs.path }}"
+          export PATH="$JAVA_HOME/bin:$PATH"
+        fi
+        cd jdeploy-source/shared
+        mvn clean install
+        cd ../cli
+        mvn clean package
+        npm install
+        npm link
+
+    # Install jDeploy from npm if not using git:// version
+    - name: Install jDeploy from npm
+      if: ${{ !startsWith(inputs.jdeploy_version, 'git://') }}
+      shell: bash
+      run: npm install -g jdeploy@${{ inputs.jdeploy_version }}
+
+    # Build DMGs using jDeploy
+    - name: Build DMGs
+      shell: bash
+      run: |
+        ${{ env.JDEPLOY_EXEC }} dmg
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+
+    # Install jq (needed for JSON parsing)
+    - name: Install jq
+      shell: bash
+      run: brew install jq
+
+    # Upload DMGs to Release
+    - name: Upload DMGs to Release
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        # Get release ID
+        release_response=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+          https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/$RELEASE_TAG)
+        
+        release_id=$(echo "$release_response" | jq -r .id)
+        
+        if [ "$release_id" == "null" ] || [ -z "$release_id" ]; then
+          echo "Release not found for tag '$RELEASE_TAG'"
+          exit 1
+        fi
+        
+        for dmg_file in ./jdeploy/installers/*.dmg; do
+          echo "Uploading $dmg_file to release ID $release_id"
+          curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/x-apple-diskimage" \
+            --data-binary @"$dmg_file" \
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id/assets?name=$(basename "$dmg_file")"
+        done
