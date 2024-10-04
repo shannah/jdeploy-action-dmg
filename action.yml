@@ -32,17 +32,18 @@ runs:
         distribution: 'zulu'
       id: setup-java-jdeploy
 
-    # Extract the jdeploy version or ref
+    # Corrected Extract jDeploy Version Step
     - name: Extract jDeploy Version
       shell: bash
       run: |
-        if [[ "${{ inputs.jdeploy_version }}" == git://* ]]; then
-          JDEPLOY_REF="${{ inputs.jdeploy_version#git:// }}"
+        jdeploy_version="${{ inputs.jdeploy_version }}"
+        if [[ "$jdeploy_version" == git://* ]]; then
+          JDEPLOY_REF="${jdeploy_version#git://}"
           echo "JDEPLOY_REF=$JDEPLOY_REF" >> $GITHUB_ENV
           echo "JDEPLOY_EXEC=jdeploy" >> $GITHUB_ENV
         else
-          echo "JDEPLOY_VERSION=${{ inputs.jdeploy_version }}" >> $GITHUB_ENV
-          echo "JDEPLOY_EXEC=jdeploy@${{ inputs.jdeploy_version }}" >> $GITHUB_ENV
+          echo "JDEPLOY_VERSION=$jdeploy_version" >> $GITHUB_ENV
+          echo "JDEPLOY_EXEC=jdeploy@$jdeploy_version" >> $GITHUB_ENV
         fi
 
     # Determine release_tag if not specified
@@ -118,14 +119,14 @@ runs:
         # Get release ID
         release_response=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
           https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/$RELEASE_TAG)
-        
+
         release_id=$(echo "$release_response" | jq -r .id)
-        
+
         if [ "$release_id" == "null" ] || [ -z "$release_id" ]; then
           echo "Release not found for tag '$RELEASE_TAG'"
           exit 1
         fi
-        
+
         for dmg_file in ./jdeploy/installers/*.dmg; do
           echo "Uploading $dmg_file to release ID $release_id"
           curl -s -H "Authorization: token $GITHUB_TOKEN" \
