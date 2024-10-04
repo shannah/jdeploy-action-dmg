@@ -169,7 +169,7 @@ runs:
       run: |
         # Get release ID
         release_response=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-          https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/$RELEASE_TAG)
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/$RELEASE_TAG")
 
         release_id=$(echo "$release_response" | jq -r .id)
 
@@ -180,8 +180,24 @@ runs:
 
         for dmg_file in ./jdeploy/installers/*.dmg; do
           echo "Uploading $dmg_file to release ID $release_id"
+          asset_name=$(basename "$dmg_file")
+          asset_name_encoded=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$asset_name")
+
+          # Delete existing asset if it exists
+          existing_asset_id=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id/assets" \
+            | jq -r ".[] | select(.name == \"$asset_name\") | .id")
+
+          if [ -n "$existing_asset_id" ] && [ "$existing_asset_id" != "null" ]; then
+            echo "Deleting existing asset with ID $existing_asset_id"
+            curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/assets/$existing_asset_id"
+          fi
+
+          # Upload the file
           curl -s -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/x-apple-diskimage" \
             --data-binary @"$dmg_file" \
-            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id/assets?name=$(basename "$dmg_file")"
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id/assets?name=$asset_name_encoded"
         done
+    
