@@ -1,6 +1,6 @@
 name: 'Create DMG and Upload to Release'
 description: 'Generates DMG files using jDeploy and uploads them to a GitHub release'
-author: 'Your Name'
+author: 'Steve Hannah'
 inputs:
   jdeploy_version:
     description: 'The version of jDeploy to use. Prefix with "git://" to build from a Git branch, tag, or commit hash.'
