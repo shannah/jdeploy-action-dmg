@@ -177,7 +177,7 @@ runs:
 
     # Install MacOS Certificates if provided
     - name: Install MacOS Certificates
-      if: ${{ inputs.macos_certificate_p12_base64 && inputs.macos_certificate_password }}
+      if: ${{ inputs.developer_certificate_p12_base64 && inputs.developer_certificate_password }}
       uses: apple-actions/import-codesign-certs@v1
       with:
         p12-file-base64: ${{ inputs.developer_certificate_p12_base64 }}
