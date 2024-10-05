@@ -1,0 +1,254 @@
+= Create DMG and Upload to Release GitHub Action
+
+Generates DMG files using jDeploy and uploads them to a GitHub release. This action automates the process of building macOS .dmg installer files for your Java applications using jDeploy and optionally signs and notarizes them.
+
+Author: Steve Hannah
+
+== Description
+
+This GitHub Action simplifies the creation of macOS DMG installer files for Java applications using jDeploy. It:
+
+Builds DMG files using jDeploy.
+Optionally signs the DMG files with your Developer ID Application certificate.
+Optionally notarizes the DMG files with Apple.
+Uploads the generated DMG files to a GitHub release.
+== Inputs
+
+The action supports the following inputs:
+
+=== Required Inputs
+
+jdeploy_version (default: 'latest')
+
+The version of jDeploy to use. Prefix with git:// to build from a Git branch, tag, or commit hash.
+
+github_token
+
+GitHub token for authentication. Typically ${{ secrets.GITHUB_TOKEN }}.
+
+=== Optional Inputs
+
+release_tag
+
+The tag name of the release to upload the DMG to. If not specified, the action will attempt to determine it automatically.
+
+target_repository (default: ${{ github.repository }})
+
+Optional target repository where to publish releases.
+
+notarization_password
+
+Notarization password for macOS code signing (App-specific password for your Apple ID).
+
+developer_id
+
+Apple Developer ID (Apple ID email) for macOS code signing.
+
+developer_team_id
+
+Apple Developer Team ID for macOS code signing.
+
+developer_certificate_name
+
+Certificate name for macOS code signing (e.g., Developer ID Application: Your Name (TEAMID1234)).
+
+developer_certificate_p12_base64
+
+Base64-encoded P12 certificate for macOS code signing.
+
+developer_certificate_password
+
+Password for the P12 certificate.
+
+== Usage
+
+To use this action in your workflow, add a step that uses shannah/jdeploy-action-dmg@main (or the appropriate version/tag).
+
+Here's an example of a workflow that uses this action:
+
+yaml
+Copy code
+name: jDeploy CI with Maven
+
+on:
+push:
+branches: ['*', '!gh-pages']
+tags: ['*']
+
+jobs:
+build:
+permissions:
+contents: write
+runs-on: ubuntu-latest
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Set up Git
+        run: |
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          git config --global user.name "${{ github.actor }}"
+      - uses: actions/checkout@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          java-package: jdk+fx
+          distribution: zulu
+          cache: maven
+      - name: Build with Maven
+        run: xvfb-run bash build.sh jar
+      - name: List files in ./target
+        run: ls -l ./javase/target
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-target
+          path: ./javase/target
+      - name: Build App Installer Bundles
+        uses: shannah/jdeploy@sign-package-files
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          jdeploy_version: 'git://sign-package-files'
+
+  create_and_upload_dmg:
+    permissions:
+      contents: write
+    runs-on: macos-latest
+    needs: build
+    steps:
+      - name: Set up Git
+        run: |
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          git config --global user.name "${{ github.actor }}"
+      - uses: actions/checkout@v3
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-target
+          path: ./javase/target
+      - name: List files in ./javase/target
+        run: ls -l ./javase/target
+      - name: Create DMG and Upload to Release
+        uses: shannah/jdeploy-action-dmg@main
+        with:
+          jdeploy_version: 'git://sign-package-files'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          developer_id: ${{ secrets.MAC_DEVELOPER_ID }}
+          developer_team_id: ${{ secrets.MAC_DEVELOPER_TEAM_ID }}
+          developer_certificate_name: ${{ secrets.MAC_DEVELOPER_CERTIFICATE_NAME }}
+          developer_certificate_p12_base64: ${{ secrets.MAC_DEVELOPER_CERTIFICATE_P12_BASE64 }}
+          developer_certificate_password: ${{ secrets.MAC_DEVELOPER_CERTIFICATE_PASSWORD }}
+          notarization_password: ${{ secrets.MAC_NOTARIZATION_PASSWORD }}
+== Setup Instructions
+
+To successfully use this action, follow these steps:
+
+=== 1. Prepare Your macOS Code Signing Certificate
+
+Export your Developer ID Application certificate as a .p12 file from Keychain Access.
+Base64 encode the .p12 file:
+bash
+Copy code
+base64 -i path/to/your_certificate.p12 -o your_certificate.p12.base64
+Store the contents of your_certificate.p12.base64 as a GitHub secret named MAC_DEVELOPER_CERTIFICATE_P12_BASE64.
+Store the password for your .p12 file as a GitHub secret named MAC_DEVELOPER_CERTIFICATE_PASSWORD.
+=== 2. Obtain Necessary Identifiers
+
+Developer ID Application Certificate Name: Found in Keychain Access, usually in the format Developer ID Application: Your Name (TEAMID1234). Store this as a secret named MAC_DEVELOPER_CERTIFICATE_NAME.
+Apple Developer Team ID: A 10-character alphanumeric string. Find it in your Apple Developer account under Membership Details. Store this as a secret named MAC_DEVELOPER_TEAM_ID.
+Apple ID Email: Your Apple ID email used for code signing. Store this as a secret named MAC_DEVELOPER_ID.
+=== 3. Generate an App-Specific Password for Notarization
+
+Sign in to your Apple ID account and generate an app-specific password.
+Store this password as a secret named MAC_NOTARIZATION_PASSWORD.
+=== 4. Set Up GitHub Secrets
+
+Add the following secrets to your GitHub repository:
+
+GITHUB_TOKEN (automatically provided in GitHub Actions).
+MAC_DEVELOPER_CERTIFICATE_P12_BASE64
+MAC_DEVELOPER_CERTIFICATE_PASSWORD
+MAC_DEVELOPER_CERTIFICATE_NAME
+MAC_DEVELOPER_TEAM_ID
+MAC_DEVELOPER_ID
+MAC_NOTARIZATION_PASSWORD
+=== 5. Configure the Workflow
+
+Use the provided example workflow or adjust it according to your needs. Ensure that the with parameters for the action are correctly set and reference the secrets you've added.
+
+== Inputs Detailed Description
+
+=== jdeploy_version
+
+Description: The version of jDeploy to use. Use git://branch-name to build from a specific Git branch, tag, or commit hash.
+Default: 'latest'
+Example:
+'latest'
+'4.0.51'
+'git://main'
+=== github_token
+
+Description: GitHub token for authentication, typically ${{ secrets.GITHUB_TOKEN }}.
+Required: Yes
+=== release_tag
+
+Description: The tag name of the release to upload the DMG to. If not specified, the action will attempt to determine it automatically based on the current Git reference.
+Required: No
+=== target_repository
+
+Description: The repository where releases should be published.
+Default: The repository that triggered the workflow (${{ github.repository }}).
+=== notarization_password
+
+Description: App-specific password for your Apple ID, used for notarization.
+Required: No
+=== developer_id
+
+Description: Your Apple ID email used for code signing.
+Required: No
+=== developer_team_id
+
+Description: Your Apple Developer Team ID (10-character alphanumeric string).
+Required: No
+=== developer_certificate_name
+
+Description: The full name of your Developer ID Application certificate (e.g., Developer ID Application: Your Name (TEAMID1234)).
+Required: No
+=== developer_certificate_p12_base64
+
+Description: Base64-encoded .p12 certificate file.
+Required: No
+=== developer_certificate_password
+
+Description: Password for the .p12 certificate file.
+Required: No
+== Notes
+
+Code Signing and Notarization: To sign and notarize your application, you must provide the necessary certificates and passwords. Without these, the DMG will be unsigned.
+Security: Always store sensitive information like certificates and passwords as encrypted GitHub Secrets.
+== Troubleshooting
+
+Certificate Issues: Ensure that your certificates are correctly exported, base64-encoded, and that the passwords are correct.
+Notarization Failures: Double-check your Apple ID credentials and app-specific password.
+== License
+
+This action is available under the MIT License.
+
+== Contributing
+
+Contributions are welcome! Please submit a pull request or open an issue to discuss changes.
+
+== References
+
+jDeploy: https://www.jdeploy.com
+Apple Developer Documentation:
+Notarizing Your Mac Software
+Creating App-Specific Passwords
+GitHub Actions:
+Creating a Java Package
+GitHub Secrets
+== Disclaimer
+
+This action is provided as-is without warranty of any kind. Use it at your own risk. The author is not responsible for any damages or issues that arise from using this action.
