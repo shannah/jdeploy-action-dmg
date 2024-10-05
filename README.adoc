@@ -100,18 +100,15 @@ jobs:
           cache: maven
       - name: Build with Maven
         run: xvfb-run bash build.sh jar
-      - name: List files in ./target
-        run: ls -l ./javase/target
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: build-target
           path: ./javase/target
       - name: Build App Installer Bundles
-        uses: shannah/jdeploy@sign-package-files
+        uses: shannah/jdeploy@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          jdeploy_version: 'git://sign-package-files'
 
   create_and_upload_dmg:
     permissions:
@@ -129,12 +126,9 @@ jobs:
         with:
           name: build-target
           path: ./javase/target
-      - name: List files in ./javase/target
-        run: ls -l ./javase/target
       - name: Create DMG and Upload to Release
         uses: shannah/jdeploy-action-dmg@main
         with:
-          jdeploy_version: 'git://sign-package-files'
           github_token: ${{ secrets.GITHUB_TOKEN }}
           developer_id: ${{ secrets.MAC_DEVELOPER_ID }}
           developer_team_id: ${{ secrets.MAC_DEVELOPER_TEAM_ID }}
