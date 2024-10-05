@@ -202,6 +202,18 @@ runs:
           echo "JDEPLOY_MAC_DEVELOPER_CERTIFICATE_NAME=${{ inputs.developer_certificate_name }}" >> $GITHUB_ENV
         fi
 
+    - name: Enable code-signing
+      shell: bash
+      if: ${{ inputs.developer_certificate_name && inputs.developer_certificate_p12_base64 && inputs.developer_certificate_password }}
+      run: |
+        npm pkg set jdeploy.codesign=true --json
+
+    - name: Enable notarization
+      shell: bash
+      if: ${{ inputs.developer_id && inputs.notarization_password }}
+      run: |
+        npm pkg set jdeploy.notarize=true --json
+
     # Build DMGs using jDeploy
     - name: Build DMGs
       shell: bash
