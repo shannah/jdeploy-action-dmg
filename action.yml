@@ -12,6 +12,10 @@ inputs:
   github_token:
     description: 'GitHub token for authentication'
     required: true
+  target_repository:
+    description: Optional target repository where to publish releases.
+    required: false
+    default: ${{ github.repository }}
 runs:
   using: 'composite'
   steps:
@@ -29,6 +33,10 @@ runs:
         java-version: '11'
         distribution: 'zulu'
       id: setup-java-jdeploy
+
+    - name: Set jDeploy Source Environment Variable
+      shell: bash
+      run: echo "JDEPLOY_SOURCE=https://github.com/${{ inputs.target_repository }}" >> $GITHUB_ENV
 
     # Corrected Extract jDeploy Version Step
     - name: Extract jDeploy Version
