@@ -16,6 +16,25 @@ inputs:
     description: Optional target repository where to publish releases.
     required: false
     default: ${{ github.repository }}
+  notarization_password:
+    description: 'Notarization password for macOS code signing'
+    required: false
+  developer_id:
+    description: 'Apple Developer ID for macOS code signing'
+    required: false
+  developer_team_id:
+    description: 'Apple Developer Team ID for macOS code signing'
+    required: false
+  developer_certificate_name:
+    description: 'Certificate name for macOS code signing'
+    required: false
+  developer_certificate_p12_base64:
+    description: 'Base64-encoded P12 certificate for macOS code signing'
+    required: false
+  developer_certificate_password:
+    description: 'Password for the P12 certificate'
+    required: false
+
 runs:
   using: 'composite'
   steps:
@@ -155,6 +174,33 @@ runs:
         npm pkg set jdeploy.gitTag="${{ github.ref_name }}"
       env:
         GH_TOKEN: ${{ github.actor }}:${{ inputs.github_token }}
+
+    # Install MacOS Certificates if provided
+    - name: Install MacOS Certificates
+      if: ${{ inputs.macos_certificate_p12_base64 && inputs.macos_certificate_password }}
+      uses: apple-actions/import-codesign-certs@v1
+      with:
+        p12-file-base64: ${{ inputs.developer_certificate_p12_base64 }}
+        p12-password: ${{ inputs.developer_certificate_password }}
+        keychain: 'build.keychain'
+
+    - name: Set Code Signing Environment Variables
+      shell: bash
+      run: |
+        echo "Setting code signing environment variables"
+        # Set each environment variable if the input is provided
+        if [ -n "${{ inputs.notarization_password }}" ]; then
+          echo "JDEPLOY_MAC_NOTARIZATION_PASSWORD=${{ inputs.notarization_password }}" >> $GITHUB_ENV
+        fi
+        if [ -n "${{ inputs.developer_id }}" ]; then
+          echo "JDEPLOY_MAC_DEVELOPER_ID=${{ inputs.developer_id }}" >> $GITHUB_ENV
+        fi
+        if [ -n "${{ inputs.developer_team_id }}" ]; then
+          echo "JDEPLOY_MAC_DEVELOPER_TEAM_ID=${{ inputs.developer_team_id }}" >> $GITHUB_ENV
+        fi
+        if [ -n "${{ inputs.developer_certificate_name }}" ]; then
+          echo "JDEPLOY_MAC_DEVELOPER_CERTIFICATE_NAME=${{ inputs.developer_certificate_name }}" >> $GITHUB_ENV
+        fi
 
     # Build DMGs using jDeploy
     - name: Build DMGs
