@@ -229,6 +229,7 @@ runs:
           echo "Error: Could not extract 'developer_certificate_name' from the certificate."
           exit 1
         fi
+        echo "Added developer_certificate_name to the environment"
         
         if [ -n "$TEAM_ID" ]; then
           echo "JDEPLOY_MAC_DEVELOPER_TEAM_ID=$TEAM_ID" >> $GITHUB_ENV
@@ -236,6 +237,8 @@ runs:
           echo "Error: Could not extract 'developer_team_id' from the certificate."
           exit 1
         fi
+        
+        echo "Added developer_team_id to the environment"
         
         # Clean up temporary files
         rm -f certificate.p12 cert.pem
