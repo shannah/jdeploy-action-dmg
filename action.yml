@@ -215,7 +215,7 @@ runs:
         # Extract the Organizational Unit (OU) field from the certificate subject
         DEVELOPER_CERTIFICATE_NAME=$(openssl x509 -in cert.pem -noout -subject | sed -n 's/.*OU=\(.*\)\/O=.*/\1/p' | sed 's/\/CN=.*//')
         
-        echo "Extracted the developer_certificate_name $DEVELOPER_CERTIFICATE_NAME from the certificate"
+        echo "Extracted the developer_certificate_name '$DEVELOPER_CERTIFICATE_NAME' from the certificate"
         
         # Extract the Team ID from the certificate name (assuming it's in parentheses)
         TEAM_ID=$(echo "$DEVELOPER_CERTIFICATE_NAME" | grep -oE '\([A-Z0-9]{10}\)' | tr -d '()')
