@@ -68,7 +68,7 @@ runs:
           echo "JDEPLOY_EXEC=jdeploy" >> $GITHUB_ENV
         else
           echo "JDEPLOY_VERSION=$jdeploy_version" >> $GITHUB_ENV
-          echo "JDEPLOY_EXEC=jdeploy@$jdeploy_version" >> $GITHUB_ENV
+          echo "JDEPLOY_EXEC=jdeploy" >> $GITHUB_ENV
         fi
 
     # Determine release_tag if not specified
