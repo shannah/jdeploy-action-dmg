@@ -186,7 +186,7 @@ runs:
 
     # Extract Certificate Name and Team ID if not provided
     - name: Extract Certificate Name and Team ID
-      if: ${{ !inputs.developer_certificate_name || !inputs.developer_team_id }}
+      if: ${{ (!inputs.developer_certificate_name || !inputs.developer_team_id) && inputs.developer_certificate_p12_base64 && inputs.developer_certificate_password }}
       shell: bash
       env:
         P12_BASE64: ${{ inputs.developer_certificate_p12_base64 }}
@@ -200,17 +200,27 @@ runs:
           exit 1
         fi
         
+        echo "About to decode the P12 certificate"
+        
         # Decode the base64-encoded P12 certificate
         echo "$P12_BASE64" | base64 --decode > certificate.p12
+        
+        echo "Decoded the P12 certificate"
         
         # Extract the certificate to a PEM file
         openssl pkcs12 -in certificate.p12 -nokeys -passin pass:"$P12_PASSWORD" -out cert.pem
         
+        echo "Extracted the certificate to a PEM file"
+        
         # Extract the Organizational Unit (OU) field from the certificate subject
         DEVELOPER_CERTIFICATE_NAME=$(openssl x509 -in cert.pem -noout -subject | sed -n 's/.*OU=\(.*\)\/O=.*/\1/p' | sed 's/\/CN=.*//')
         
+        echo "Extracted the developer_certificate_name from the certificate"
+        
         # Extract the Team ID from the certificate name (assuming it's in parentheses)
         TEAM_ID=$(echo "$DEVELOPER_CERTIFICATE_NAME" | grep -oE '\([A-Z0-9]{10}\)' | tr -d '()')
+        
+        echo "Extracted the developer_team_id from the certificate"
         
         # Set the environment variables if they were successfully extracted
         if [ -n "$DEVELOPER_CERTIFICATE_NAME" ]; then
