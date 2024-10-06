@@ -4,7 +4,7 @@ author: 'Steve Hannah'
 inputs:
   jdeploy_version:
     description: 'The version of jDeploy to use. Prefix with "git://" to build from a Git branch, tag, or commit hash.'
-    default: 'git://master'
+    default: '4.1.1'
     required: true
   release_tag:
     description: 'The tag name of the release to upload the DMG to. If not specified, the action will attempt to determine it automatically.'
