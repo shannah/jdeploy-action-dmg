@@ -193,37 +193,46 @@ runs:
         P12_PASSWORD: ${{ inputs.developer_certificate_password }}
       run: |
         echo "Extracting developer_certificate_name and developer_team_id from the P12 certificate"
-        
+
         # Check if P12 base64 and password are provided
         if [ -z "$P12_BASE64" ] || [ -z "$P12_PASSWORD" ]; then
           echo "Error: 'developer_certificate_p12_base64' and 'developer_certificate_password' must be provided to extract certificate information."
           exit 1
         fi
-        
-        echo "About to decode the P12 certificate"
-        
+
         # Decode the base64-encoded P12 certificate
         echo "$P12_BASE64" | base64 --decode > certificate.p12
-        
-        echo "Decoded the P12 certificate"
-        
+
         # Extract the certificate to a PEM file
         openssl pkcs12 -in certificate.p12 -nokeys -passin pass:"$P12_PASSWORD" -out cert.pem
-        
-        echo "Extracted the certificate to a PEM file"
-        
-        openssl x509 -in cert.pem -noout -subject
-        
-        # Extract the Organizational Unit (OU) field from the certificate subject
-        DEVELOPER_CERTIFICATE_NAME=$(openssl x509 -in cert.pem -noout -subject | sed -n 's/.*OU = \(.*\)\/O=.*/\1/p' | sed 's/\/CN = .*//')
-        
-        echo "Extracted the developer_certificate_name '$DEVELOPER_CERTIFICATE_NAME' from the certificate"
-        
-        # Extract the Team ID from the certificate name (assuming it's in parentheses)
-        TEAM_ID=$(echo "$DEVELOPER_CERTIFICATE_NAME" | grep -oE '\([A-Z0-9]{10}\)' | tr -d '()')
-        
-        echo "Extracted the developer_team_id from the certificate"
-        
+
+        # Extract the subject from the certificate
+        CERT_SUBJECT=$(openssl x509 -in cert.pem -noout -subject)
+        echo "Certificate subject: $CERT_SUBJECT"
+
+        # Remove the 'subject=' prefix
+        CERT_SUBJECT=${CERT_SUBJECT#subject=}
+
+        # Extract the Developer Certificate Name from CN field
+        DEVELOPER_CERTIFICATE_NAME=$(echo "$CERT_SUBJECT" | sed -n 's/.*CN = \(.*\), OU =.*/\1/p')
+
+        # If the above didn't work, try capturing everything after 'CN = '
+        if [ -z "$DEVELOPER_CERTIFICATE_NAME" ]; then
+          DEVELOPER_CERTIFICATE_NAME=$(echo "$CERT_SUBJECT" | sed -n 's/.*CN = \(.*\)/\1/p')
+        fi
+
+        # Extract the Team ID from UID field
+        TEAM_ID=$(echo "$CERT_SUBJECT" | sed -n 's/.*UID = \([A-Z0-9]*\), CN =.*/\1/p')
+
+        # If the above didn't work, try capturing everything after 'UID = '
+        if [ -z "$TEAM_ID" ]; then
+          TEAM_ID=$(echo "$CERT_SUBJECT" | sed -n 's/.*UID = \([A-Z0-9]*\)/\1/p')
+        fi
+
+        # Output the extracted values for debugging (ensure sensitive data is not exposed)
+        echo "Extracted developer_certificate_name: '$DEVELOPER_CERTIFICATE_NAME'"
+        echo "Extracted developer_team_id: '$TEAM_ID'"
+
         # Set the environment variables if they were successfully extracted
         if [ -n "$DEVELOPER_CERTIFICATE_NAME" ]; then
           echo "JDEPLOY_MAC_DEVELOPER_CERTIFICATE_NAME=$DEVELOPER_CERTIFICATE_NAME" >> $GITHUB_ENV
@@ -231,19 +240,17 @@ runs:
           echo "Error: Could not extract 'developer_certificate_name' from the certificate."
           exit 1
         fi
-        echo "Added developer_certificate_name to the environment"
-        
+
         if [ -n "$TEAM_ID" ]; then
           echo "JDEPLOY_MAC_DEVELOPER_TEAM_ID=$TEAM_ID" >> $GITHUB_ENV
         else
           echo "Error: Could not extract 'developer_team_id' from the certificate."
           exit 1
         fi
-        
-        echo "Added developer_team_id to the environment"
-        
+
         # Clean up temporary files
         rm -f certificate.p12 cert.pem
+
 
     # Set Code Signing Environment Variables
     - name: Set Code Signing Environment Variables
