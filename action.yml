@@ -212,6 +212,8 @@ runs:
         
         echo "Extracted the certificate to a PEM file"
         
+        openssl x509 -in cert.pem -noout -subject
+        
         # Extract the Organizational Unit (OU) field from the certificate subject
         DEVELOPER_CERTIFICATE_NAME=$(openssl x509 -in cert.pem -noout -subject | sed -n 's/.*OU=\(.*\)\/O=.*/\1/p' | sed 's/\/CN=.*//')
         
