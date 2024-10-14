@@ -4,7 +4,7 @@ author: 'Steve Hannah'
 inputs:
   jdeploy_version:
     description: 'The version of jDeploy to use. Prefix with "git://" to build from a Git branch, tag, or commit hash.'
-    default: '4.1.1'
+    default: 'git://feat/tag-github-release-note-links'
     required: true
   release_tag:
     description: 'The tag name of the release to upload the DMG to. If not specified, the action will attempt to determine it automatically.'
@@ -336,4 +336,40 @@ runs:
             --data-binary @"$dmg_file" \
             "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id/assets?name=$asset_name_encoded"
         done
+    # **New Step: Update Release Notes Links**
+    - name: Update Release Notes Links
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        # Prepare arguments for jdeploy github-update-release-links
+        ARGS=()
+        for dmg_file in ./jdeploy/installers/*.dmg; do
+          asset_name=$(basename "$dmg_file")
+          # Determine the bundle type from the file name
+          if [[ "$asset_name" == *"mac-arm64"* ]]; then
+            bundle_type="mac-arm64"
+          elif [[ "$asset_name" == *"mac-x64"* ]]; then
+            bundle_type="mac-x64"
+          else
+            echo "Unknown bundle type for $asset_name"
+            continue
+          fi
+
+          # Construct the download URL
+          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${asset_name}"
+
+          # Add to arguments
+          ARGS+=("$bundle_type" "$download_url")
+        done
+
+        if [ ${#ARGS[@]} -eq 0 ]; then
+          echo "No DMG files found to update release notes."
+          exit 0
+        fi
+
+        # Run the jdeploy github-update-release-links command
+        ${{ env.JDEPLOY_EXEC }} github-update-release-links "${ARGS[@]}"
+    
+        
     
