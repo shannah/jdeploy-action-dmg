@@ -336,40 +336,68 @@ runs:
             --data-binary @"$dmg_file" \
             "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id/assets?name=$asset_name_encoded"
         done
-    # **New Step: Update Release Notes Links**
+
     - name: Update Release Notes Links
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
+        RELEASE_TAG: ${{ env.RELEASE_TAG }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
-        # Prepare arguments for jdeploy github-update-release-links
-        ARGS=()
-        for dmg_file in ./jdeploy/installers/*.dmg; do
-          asset_name=$(basename "$dmg_file")
-          # Determine the bundle type from the file name
+        # Get release ID and assets
+        release_response=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/$RELEASE_TAG")
+        
+        release_id=$(echo "$release_response" | jq -r .id)
+        
+        if [ "$release_id" == "null" ] || [ -z "$release_id" ]; then
+          echo "Release not found for tag '$RELEASE_TAG'"
+          exit 1
+        fi
+
+        # Get assets array
+        assets=$(echo "$release_response" | jq -r '.assets[] | @base64')
+
+        declare -A bundle_links
+
+        # Iterate over assets to extract download URLs and map to bundle types
+        for asset_encoded in $assets; do
+          asset=$(echo "$asset_encoded" | base64 --decode)
+          asset_name=$(echo "$asset" | jq -r '.name')
+          download_url=$(echo "$asset" | jq -r '.browser_download_url')
+
+          # Only consider assets that are DMG files
+          if [[ "$asset_name" != *.dmg ]]; then
+            # Not a DMG file, skip it
+            continue
+          fi
+
+          # Determine the bundle type based on the asset name
           if [[ "$asset_name" == *"mac-arm64"* ]]; then
             bundle_type="mac-arm64"
           elif [[ "$asset_name" == *"mac-x64"* ]]; then
             bundle_type="mac-x64"
           else
-            echo "Unknown bundle type for $asset_name"
+            echo "Unknown bundle type for asset: $asset_name"
             continue
           fi
 
-          # Construct the download URL
-          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${asset_name}"
+          # Add to the bundle_links associative array
+          bundle_links["$bundle_type"]="$download_url"
+        done
 
-          # Add to arguments
+        # Prepare arguments for jdeploy github-update-release-links
+        ARGS=()
+        for bundle_type in "${!bundle_links[@]}"; do
+          download_url="${bundle_links[$bundle_type]}"
           ARGS+=("$bundle_type" "$download_url")
         done
 
         if [ ${#ARGS[@]} -eq 0 ]; then
-          echo "No DMG files found to update release notes."
+          echo "No DMG assets found to update release notes."
           exit 0
         fi
 
         # Run the jdeploy github-update-release-links command
         ${{ env.JDEPLOY_EXEC }} github-update-release-links "${ARGS[@]}"
-    
-        
-    
+
