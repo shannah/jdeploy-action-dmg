@@ -302,11 +302,11 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
-        TARGET_REPOSITORY: ${{ inputs.target_repository }}
+        GITHUB_REPOSITORY: ${{ inputs.target_repository }}
       run: |
         # Get release ID
         release_response=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-          "https://api.github.com/repos/${TARGET_REPOSITORY}/releases/tags/$RELEASE_TAG")
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/$RELEASE_TAG")
 
         release_id=$(echo "$release_response" | jq -r .id)
 
@@ -322,20 +322,20 @@ runs:
 
           # Delete existing asset if it exists
           existing_asset_id=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${TARGET_REPOSITORY}/releases/$release_id/assets" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id/assets" \
             | jq -r ".[] | select(.name == \"$asset_name\") | .id")
 
           if [ -n "$existing_asset_id" ] && [ "$existing_asset_id" != "null" ]; then
             echo "Deleting existing asset with ID $existing_asset_id"
             curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
-              "https://api.github.com/repos/${TARGET_REPOSITORY}/releases/assets/$existing_asset_id"
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/assets/$existing_asset_id"
           fi
 
           # Upload the file
           curl -s -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/x-apple-diskimage" \
             --data-binary @"$dmg_file" \
-            "https://uploads.github.com/repos/${TARGET_REPOSITORY}/releases/$release_id/assets?name=$asset_name_encoded"
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id/assets?name=$asset_name_encoded"
         done
 
     - name: Update Release Notes Links
@@ -343,11 +343,11 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         RELEASE_TAG: ${{ env.RELEASE_TAG }}
-        TARGET_REPOSITORY: ${{ inputs.target_repository }}
+        GITHUB_REPOSITORY: ${{ inputs.target_repository }}
       run: |
         # Get release ID and assets
         release_response=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-          "https://api.github.com/repos/${TARGET_REPOSITORY}/releases/tags/$RELEASE_TAG")
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/$RELEASE_TAG")
         
         release_id=$(echo "$release_response" | jq -r .id)
         
